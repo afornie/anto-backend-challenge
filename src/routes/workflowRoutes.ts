@@ -1,8 +1,7 @@
 import { Router } from 'express';
 import { AppDataSource } from '../data-source';
 import { Workflow } from '../models/Workflow';
-import { TaskStatus } from '../workers/taskRunner';
-import { WorkflowStatus } from '../workflows/WorkflowFactory';
+import { TaskStatus, WorkflowStatus } from '../models/statuses';
 
 const router = Router();
 

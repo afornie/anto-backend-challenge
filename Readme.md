@@ -233,6 +233,17 @@ Example response:
 
 `GET /workflow/:id/status` returns `404` when the workflow does not exist. `GET /workflow/:id/results` returns `404` for a missing workflow and `400` while the workflow is not completed.
 
+### Verification
+
+Run the automated checks with:
+
+```bash
+npm run typecheck
+npm test
+```
+
+The test suite covers polygon area calculation, invalid GeoJSON handling, dependency parsing from YAML, dependent workflow execution, report aggregation, and failed-workflow final result persistence.
+
 
 ### **Coding Challenge Tasks for the Interviewee**
 

@@ -1,9 +1,12 @@
 {
   "scripts": {
     "start": "ts-node src/index.ts",
-    "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts"
+    "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
+    "test": "ts-node src/tests/runTests.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@turf/area": "^7.1.0",
     "@turf/turf": "^7.1.0",
     "@types/geojson": "^7946.0.15",
     "bcrypt": "^5.1.1",

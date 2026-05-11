@@ -1,6 +1,6 @@
 import { Job } from './Job';
 import { Task } from '../models/Task';
-import { TaskStatus } from '../workers/taskRunner';
+import { TaskStatus } from '../models/statuses';
 
 function parseStoredValue(value?: string | null): unknown {
     if (!value) {
