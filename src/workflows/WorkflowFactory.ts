@@ -15,6 +15,7 @@ export enum WorkflowStatus {
 interface WorkflowStep {
     taskType: string;
     stepNumber: number;
+    dependsOn?: number | string;
 }
 
 interface WorkflowDefinition {
@@ -35,28 +36,62 @@ export class WorkflowFactory {
     async createWorkflowFromYAML(filePath: string, clientId: string, geoJson: string): Promise<Workflow> {
         const fileContent = fs.readFileSync(filePath, 'utf8');
         const workflowDef = yaml.load(fileContent) as WorkflowDefinition;
-        const workflowRepository = this.dataSource.getRepository(Workflow);
-        const taskRepository = this.dataSource.getRepository(Task);
-        const workflow = new Workflow();
 
-        workflow.clientId = clientId;
-        workflow.status = WorkflowStatus.Initial;
+        return this.dataSource.transaction(async manager => {
+            const workflowRepository = manager.getRepository(Workflow);
+            const taskRepository = manager.getRepository(Task);
+            const workflow = new Workflow();
 
-        const savedWorkflow = await workflowRepository.save(workflow);
+            workflow.clientId = clientId;
+            workflow.status = WorkflowStatus.Initial;
+            workflow.finalResult = null;
 
-        const tasks: Task[] = workflowDef.steps.map(step => {
-            const task = new Task();
-            task.clientId = clientId;
-            task.geoJson = geoJson;
-            task.status = TaskStatus.Queued;
-            task.taskType = step.taskType;
-            task.stepNumber = step.stepNumber;
-            task.workflow = savedWorkflow;
-            return task;
+            const savedWorkflow = await workflowRepository.save(workflow);
+
+            const tasks: Task[] = workflowDef.steps.map(step => {
+                const task = new Task();
+                task.clientId = clientId;
+                task.geoJson = geoJson;
+                task.status = TaskStatus.Queued;
+                task.taskType = step.taskType;
+                task.stepNumber = step.stepNumber;
+                task.workflow = savedWorkflow;
+                task.output = null;
+                task.error = null;
+                return task;
+            });
+
+            const savedTasks = await taskRepository.save(tasks);
+
+            for (const [index, step] of workflowDef.steps.entries()) {
+                if (step.dependsOn === undefined || step.dependsOn === null) {
+                    continue;
+                }
+
+                const dependency = this.findDependencyTask(savedTasks, step.dependsOn);
+                if (!dependency) {
+                    throw new Error(`Dependency ${step.dependsOn} for step ${step.stepNumber} was not found`);
+                }
+
+                savedTasks[index].dependency = dependency;
+            }
+
+            await taskRepository.save(savedTasks);
+
+            return savedWorkflow;
         });
+    }
 
-        await taskRepository.save(tasks);
+    private findDependencyTask(tasks: Task[], dependsOn: number | string): Task | undefined {
+        if (typeof dependsOn === 'number') {
+            return tasks.find(task => task.stepNumber === dependsOn);
+        }
 
-        return savedWorkflow;
+        const dependencyStepNumber = Number(dependsOn);
+        if (Number.isInteger(dependencyStepNumber)) {
+            return tasks.find(task => task.stepNumber === dependencyStepNumber);
+        }
+
+        return tasks.find(task => task.taskType === dependsOn);
     }
 }

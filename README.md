@@ -54,18 +54,21 @@ src
 ├─ jobs/
 │   ├─ Job.ts           # Job interface
 │   ├─ JobFactory.ts    # getJobForTaskType function for mapping taskType to a Job
-│   ├─ TaskRunner.ts    # Handles job execution & task/workflow state transitions
 │   ├─ DataAnalysisJob.ts (example)
 │   ├─ EmailNotificationJob.ts (example)
+│   ├─ PolygonAreaJob.ts
+│   ├─ ReportGenerationJob.ts
 │
 ├─ workflows/
 │   ├─ WorkflowFactory.ts  # Creates workflows & tasks from a YAML definition
 │
 ├─ workers/
+│   ├─ taskRunner.ts    # Handles job execution & task/workflow state transitions
 │   ├─ taskWorker.ts    # Background worker that fetches queued tasks & runs them
 │
 ├─ routes/
 │   ├─ analysisRoutes.ts # POST /analysis endpoint to create workflows
+│   ├─ workflowRoutes.ts # GET workflow status and results endpoints
 │
 ├─ data-source.ts       # TypeORM DataSource configuration
 └─ index.ts             # Express.js server initialization & starting the worker
@@ -105,10 +108,17 @@ src
      ```yaml
      name: "example_workflow"
      steps:
-       - taskType: "analysis"
+       - taskType: "polygonArea"
          stepNumber: 1
-       - taskType: "notification"
+       - taskType: "analysis"
          stepNumber: 2
+         dependsOn: 1
+       - taskType: "reportGeneration"
+         stepNumber: 3
+         dependsOn: 2
+       - taskType: "notification"
+         stepNumber: 4
+         dependsOn: 3
      ```
 
 ### Running the Application
@@ -168,8 +178,77 @@ src
 
 4. **Check Logs:**
    - The worker picks up tasks from `queued` state.
-   - `TaskRunner` runs the corresponding job (e.g., data analysis, email notification) and updates states.
-   - Once tasks are done, the workflow is marked as `completed`.
+   - `TaskRunner` runs jobs in dependency order and updates task/workflow states.
+   - Once all tasks are done, the workflow is marked as `completed` or `failed`.
+
+### Testing the New Workflow Features
+
+The default `src/workflows/example_workflow.yml` now runs four chained tasks:
+
+```yaml
+name: "example_workflow"
+steps:
+  - taskType: "polygonArea"
+    stepNumber: 1
+  - taskType: "analysis"
+    stepNumber: 2
+    dependsOn: 1
+  - taskType: "reportGeneration"
+    stepNumber: 3
+    dependsOn: 2
+  - taskType: "notification"
+    stepNumber: 4
+    dependsOn: 3
+```
+
+Create a workflow with `POST /analysis`, then use the returned `workflowId` to check progress:
+
+```bash
+curl http://localhost:3000/workflow/<workflow-id>/status
+```
+
+Example response:
+
+```json
+{
+  "workflowId": "3433c76d-f226-4c91-afb5-7dfc7accab24",
+  "status": "in_progress",
+  "completedTasks": 2,
+  "totalTasks": 4
+}
+```
+
+When the workflow is completed, retrieve the final aggregated result:
+
+```bash
+curl http://localhost:3000/workflow/<workflow-id>/results
+```
+
+Example response:
+
+```json
+{
+  "workflowId": "3433c76d-f226-4c91-afb5-7dfc7accab24",
+  "status": "completed",
+  "finalResult": {
+    "workflowId": "3433c76d-f226-4c91-afb5-7dfc7accab24",
+    "status": "completed",
+    "tasks": [
+      {
+        "taskId": "task-id",
+        "type": "polygonArea",
+        "status": "completed",
+        "output": {
+          "areaInSquareMeters": 7624880.2
+        },
+        "error": null
+      }
+    ]
+  }
+}
+```
+
+`GET /workflow/:id/status` returns `404` when the workflow does not exist. `GET /workflow/:id/results` returns `404` for a missing workflow and `400` while the workflow is not completed.
 
 ### **Coding Challenge Tasks for the Interviewee**
 

@@ -7,12 +7,13 @@ export async function taskWorker() {
     const taskRunner = new TaskRunner(taskRepository);
 
     while (true) {
-        const task = await taskRepository.findOne({
+        const tasks = await taskRepository.find({
             where: { status: TaskStatus.Queued },
-            relations: ['workflow'] // Ensure workflow is loaded
+            relations: ['workflow', 'dependency'],
+            order: { stepNumber: 'ASC' }
         });
 
-        if (task) {
+        for (const task of tasks) {
             try {
                 await taskRunner.run(task);
 
